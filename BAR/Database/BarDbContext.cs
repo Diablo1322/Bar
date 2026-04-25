@@ -73,9 +73,8 @@ public class BarDbContext : DbContext
             new Drink { Id = 9, Name = "Ночной русский", BasePrice = 8, IsNight = true, IsHidden = false },
             new Drink { Id = 10, Name = "Бессонница", BasePrice = 10, IsNight = true, IsHidden = false },
             new Drink { Id = 11, Name = "Лунный свет", BasePrice = 12, IsNight = true, IsHidden = false },
-            // Секретные напитки (скрыты из меню)
-            new Drink { Id = 12, Name = "Ошибка бармена", BasePrice = 0, IsNight = false, IsHidden = true },
-            new Drink { Id = 13, Name = "Мертвец", BasePrice = 0, IsNight = false, IsHidden = true }
+            // Мертвец: водка + ром + молоко (скрыт из меню, удваивает баланс)
+            new Drink { Id = 12, Name = "Мертвец", BasePrice = 0, IsNight = false, IsHidden = true }
         );
 
         modelBuilder.Entity<DrinkIngredient>().HasData(
@@ -121,14 +120,10 @@ public class BarDbContext : DbContext
             new DrinkIngredient { DrinkId = 11, IngredientId = 5 },
             new DrinkIngredient { DrinkId = 11, IngredientId = 7 },
             new DrinkIngredient { DrinkId = 11, IngredientId = 8 },
-            // Ошибка бармена: текила + виски + молоко
-            new DrinkIngredient { DrinkId = 12, IngredientId = 3 },
-            new DrinkIngredient { DrinkId = 12, IngredientId = 4 },
-            new DrinkIngredient { DrinkId = 12, IngredientId = 10 },
             // Мертвец: водка + ром + молоко
-            new DrinkIngredient { DrinkId = 13, IngredientId = 1 },
-            new DrinkIngredient { DrinkId = 13, IngredientId = 2 },
-            new DrinkIngredient { DrinkId = 13, IngredientId = 10 }
+            new DrinkIngredient { DrinkId = 12, IngredientId = 1 },
+            new DrinkIngredient { DrinkId = 12, IngredientId = 2 },
+            new DrinkIngredient { DrinkId = 12, IngredientId = 10 }
         );
     }
 }

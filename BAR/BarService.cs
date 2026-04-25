@@ -84,7 +84,7 @@ public class BarService : IBarService
         rl.RequestCount++;
         await _db.SaveChangesAsync();
 
-        if (rl.RequestCount > 30)
+        if (rl.RequestCount > 15)
         {
             var retryAfter = (int)(60 - (now - rl.WindowStart).TotalSeconds);
             return (false, Math.Max(1, retryAfter));
@@ -143,7 +143,7 @@ public class BarService : IBarService
         if (account.Profile!.BarClosed) return Results.Ok(new { status = "error", error = "bar_closed" });
 
         var drink = await _db.Drinks.FirstOrDefaultAsync(d => d.Name == drinkName);
-        if (drink == null || drink.MinDrinkCount > account.Profile.TotalOrders)
+        if (drink == null || drink.IsHidden || drink.MinDrinkCount > account.Profile.TotalOrders)
             return Results.Ok(new { status = "error", error = "unknown_drink", balance = account.Balance!.Amount, mood_level = account.MoodTracking!.MoodLevel });
 
         var consecutive = await GetConsecutiveCount(account.Id, drinkName);
@@ -152,9 +152,6 @@ public class BarService : IBarService
         var price = CalculatePrice(drink, account.MoodTracking!.MoodLevel);
 
         if (nextConsecutive == 8)
-            price = 0;
-
-        if (drink.IsHidden)
             price = 0;
 
         if (account.Balance!.Amount < price && price != 0)
@@ -276,9 +273,7 @@ public class BarService : IBarService
         if (matchingDrink.IsHidden)
         {
             result["secret"] = true;
-            if (matchingDrink.Name == "Ошибка бармена")
-                result["effect"] = "mood_max";
-            else if (matchingDrink.Name == "Мертвец")
+            if (matchingDrink.Name == "Мертвец")
                 result["effect"] = "balance_doubled";
         }
 
@@ -309,15 +304,18 @@ public class BarService : IBarService
         var (allowed, retryAfter) = await CheckRateLimit(account);
         if (!allowed) return Results.Ok(new { status = "error", error = "rate_limit", retry_after = retryAfter });
 
-        if (amount <= 0 || account.Balance!.Amount < amount)
-            return Results.Ok(new { status = "error", error = "insufficient_funds" });
+        if (amount <= 0)
+            return Results.Ok(new { status = "error", error = "invalid_amount", balance = account.Balance!.Amount, mood_level = account.MoodTracking!.MoodLevel });
+
+        if (account.Balance!.Amount < amount)
+            return Results.Ok(new { status = "error", error = "insufficient_funds", balance = account.Balance.Amount, mood_level = account.MoodTracking!.MoodLevel });
 
         account.Balance.Amount -= amount;
 
-        if (amount >= 20)
-            account.MoodTracking!.MoodLevel = "generous";
-        else if (amount >= 10)
+        if (amount >= 10)
             account.MoodTracking!.MoodLevel = "friendly";
+        else
+            account.MoodTracking!.MoodLevel = "normal";
 
         await _db.SaveChangesAsync();
 
@@ -421,9 +419,6 @@ public class BarService : IBarService
             case "friendly":
                 price = Math.Max(5, price - 2);
                 break;
-            case "generous":
-                price = Math.Max(5, price - 4);
-                break;
         }
 
         return Math.Max(5, price);
@@ -451,15 +446,12 @@ public class BarService : IBarService
         mood.LastDrink = drinkName;
         mood.LastOrderTime = DateTime.UtcNow;
 
-        if (drinkName == "Ошибка бармена")
-        {
-            mood.MoodLevel = "generous";
-        }
-        else if (method == "mix")
+        // Mix всегда даёт friendly
+        if (method == "mix")
         {
             mood.MoodLevel = "friendly";
         }
-        else if (mood.ConsecutiveSimilarOrders >= 7)
+        else if (mood.ConsecutiveSimilarOrders >= 8)
         {
             mood.MoodLevel = "hostile";
         }
@@ -493,9 +485,6 @@ public class BarService : IBarService
             profile.Rank = "Постоянный";
         else
             profile.Rank = "Новичок";
-
-        if (mood.ConsecutiveSimilarOrders > 12)
-            profile.BarClosed = true;
 
         await _db.SaveChangesAsync();
     }

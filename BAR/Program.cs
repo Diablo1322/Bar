@@ -31,6 +31,17 @@ using (var scope = app.Services.CreateScope())
     db.Database.Migrate();
 }
 
+// ====================== ОБРАБОТКА НЕИЗВЕСТНЫХ ЭНДПОИНТОВ ======================
+app.UseStatusCodePages(async context =>
+{
+    var response = context.HttpContext.Response;
+    if (response.StatusCode == 404)
+    {
+        response.ContentType = "application/json; charset=utf-8";
+        await response.WriteAsync("{\"status\":\"error\",\"error\":\"not_found\"}");
+    }
+});
+
 // ====================== ЭНДПОИНТЫ ======================
 
 app.MapPost("/register", async (IBarService service) => await service.RegisterAsync());
