@@ -109,7 +109,7 @@ public class BarService : IBarService
         var drinks = await _db.Drinks
             .Include(d => d.DrinkIngredients)
             .ThenInclude(di => di.Ingredient)
-            .Where(d => !d.IsHidden)  // ← СКРЫВАЕМ СЕКРЕТНЫЕ НАПИТКИ
+            .Where(d => !d.IsHidden)
             .ToListAsync();
 
         var drinkList = drinks
@@ -118,7 +118,7 @@ public class BarService : IBarService
             .Select(d => new
             {
                 name = d.Name,
-                price = CalculatePrice(d, account.MoodTracking!.MoodLevel, isNight),
+                price = CalculatePrice(d, account.MoodTracking!.MoodLevel),
                 ingredients = d.DrinkIngredients.Select(di => di.Ingredient!.Name).ToList()
             })
             .ToList();
@@ -143,24 +143,18 @@ public class BarService : IBarService
         if (account.Profile!.BarClosed) return Results.Ok(new { status = "error", error = "bar_closed" });
 
         var drink = await _db.Drinks.FirstOrDefaultAsync(d => d.Name == drinkName);
-        if (drink == null || (drink.MinDrinkCount > account.Profile.TotalOrders && drink.Name != "Ошибка бармена"))
-            return Results.Ok(new { status = "error", error = "unknown_drink", balance = account.Balance!.Amount, mood_level = account.MoodTracking!.MoodLevel });
-
-        var isNight = IsNightTime(xTime);
-        if (drink.Name != "Ошибка бармена" && isNight != drink.IsNight)
+        if (drink == null || drink.MinDrinkCount > account.Profile.TotalOrders)
             return Results.Ok(new { status = "error", error = "unknown_drink", balance = account.Balance!.Amount, mood_level = account.MoodTracking!.MoodLevel });
 
         var consecutive = await GetConsecutiveCount(account.Id, drinkName);
         var nextConsecutive = consecutive + 1;
 
-        var price = CalculatePrice(drink, account.MoodTracking!.MoodLevel, isNight);
+        var price = CalculatePrice(drink, account.MoodTracking!.MoodLevel);
 
-        // 8-й заказ (order) — бесплатный
         if (nextConsecutive == 8)
             price = 0;
 
-        // Секретный напиток всегда бесплатный
-        if (drink.Name == "Ошибка бармена")
+        if (drink.IsHidden)
             price = 0;
 
         if (account.Balance!.Amount < price && price != 0)
@@ -204,12 +198,10 @@ public class BarService : IBarService
             return Results.Ok(new { status = "error", error = "unknown_recipe", balance = account.Balance!.Amount, mood_level = account.MoodTracking!.MoodLevel });
 
         var normalized = ingredients.Select(i => i.ToLowerInvariant().Trim()).OrderBy(x => x).ToList();
-        var isNight = IsNightTime(xTime);
 
         var drinks = await _db.Drinks
             .Include(d => d.DrinkIngredients)
             .ThenInclude(di => di.Ingredient)
-            .Where(d => d.MinDrinkCount <= account.Profile.TotalOrders && (d.Name == "Ошибка бармена" || (isNight ? d.IsNight : !d.IsNight)))
             .ToListAsync();
 
         Drink? matchingDrink = null;
@@ -229,7 +221,6 @@ public class BarService : IBarService
 
         if (matchingDrink == null)
         {
-            // Неудачный микс — портит настроение
             account.MoodTracking!.MoodLevel = account.MoodTracking.MoodLevel switch
             {
                 "normal" => "grumpy",
@@ -244,21 +235,22 @@ public class BarService : IBarService
         var consecutive = await GetConsecutiveCount(account.Id, matchingDrink.Name);
         var nextConsecutive = consecutive + 1;
 
-        var basePrice = CalculatePrice(matchingDrink, account.MoodTracking!.MoodLevel, isNight);
+        var basePrice = CalculatePrice(matchingDrink, account.MoodTracking!.MoodLevel);
         var price = (int)Math.Max(5, basePrice * 0.8);
 
-        // 7-й микс — бесплатный
         if (nextConsecutive == 7)
             price = 0;
 
-        // Секретный напиток всегда бесплатный
-        if (matchingDrink.Name == "Ошибка бармена")
+        if (matchingDrink.IsHidden)
             price = 0;
 
         if (account.Balance!.Amount < price && price != 0)
             return Results.Ok(new { status = "error", error = "insufficient_funds", price, balance = account.Balance.Amount, mood_level = account.MoodTracking.MoodLevel });
 
         account.Balance.Amount -= price;
+
+        if (matchingDrink.Name == "Мертвец")
+            account.Balance.Amount = account.Balance.Amount * 2;
 
         _db.Orders.Add(new Order
         {
@@ -272,31 +264,25 @@ public class BarService : IBarService
         await UpdateMoodAndProfile(account, matchingDrink.Name, "mix");
         await _db.SaveChangesAsync();
 
-        var response = new
+        var result = new Dictionary<string, object>
         {
-            status = "ok",
-            drink = matchingDrink.Name,
-            price,
-            balance = account.Balance.Amount,
-            mood_level = account.MoodTracking!.MoodLevel
+            ["status"] = "ok",
+            ["drink"] = matchingDrink.Name,
+            ["price"] = price,
+            ["balance"] = account.Balance.Amount,
+            ["mood_level"] = account.MoodTracking!.MoodLevel
         };
 
-        // Добавляем поля secret и effect для секретного напитка
-        if (matchingDrink.Name == "Ошибка бармена")
+        if (matchingDrink.IsHidden)
         {
-            return Results.Ok(new
-            {
-                status = "ok",
-                drink = matchingDrink.Name,
-                price,
-                secret = true,
-                effect = "mood_max",
-                balance = account.Balance.Amount,
-                mood_level = account.MoodTracking!.MoodLevel
-            });
+            result["secret"] = true;
+            if (matchingDrink.Name == "Ошибка бармена")
+                result["effect"] = "mood_max";
+            else if (matchingDrink.Name == "Мертвец")
+                result["effect"] = "balance_doubled";
         }
 
-        return Results.Ok(response);
+        return Results.Ok(result);
     }
 
     public async Task<IResult> GetBalanceAsync(string token)
@@ -386,7 +372,7 @@ public class BarService : IBarService
         });
     }
 
-    // ====================== ВСПОМОГАТЕЛЬНЫЕ ======================
+    // ====================== HELPERS ======================
     private async Task<Account?> GetAccountWithAll(string token)
     {
         return await _db.Accounts
@@ -411,16 +397,12 @@ public class BarService : IBarService
     {
         if (string.IsNullOrEmpty(xTime) || !TimeOnly.TryParse(xTime, out var time))
             return false;
-        return time.Hour >= 22 || time.Hour < 6;
+        return time.Hour >= 0 && time.Hour < 6;
     }
 
-    private int CalculatePrice(Drink drink, string moodLevel, bool isNight)
+    private int CalculatePrice(Drink drink, string moodLevel)
     {
         int price = drink.BasePrice + drink.MoodPriceModifier;
-
-        // Ночные напитки ночью — без дополнительной скидки, они и так дешёвые
-        // Убираем скидку -3 для ночных напитков
-        // (она была нужна только если ночная скидка действительно существует в оригинале)
 
         switch (moodLevel)
         {
@@ -469,12 +451,10 @@ public class BarService : IBarService
         mood.LastDrink = drinkName;
         mood.LastOrderTime = DateTime.UtcNow;
 
-        // Секретный напиток — максимум настроения
         if (drinkName == "Ошибка бармена")
         {
             mood.MoodLevel = "generous";
         }
-        // Обычная логика настроения
         else if (method == "mix")
         {
             mood.MoodLevel = "friendly";
@@ -492,7 +472,6 @@ public class BarService : IBarService
             mood.MoodLevel = "normal";
         }
 
-        // Profile updates
         profile.TotalOrders++;
 
         profile.UniqueDrinks = await _db.Orders

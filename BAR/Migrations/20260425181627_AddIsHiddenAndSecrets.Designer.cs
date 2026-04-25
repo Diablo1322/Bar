@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BAR.Migrations
 {
     [DbContext(typeof(BarDbContext))]
-    [Migration("20260425164148_AddSecretDrinkAndHostileMood")]
-    partial class AddSecretDrinkAndHostileMood
+    [Migration("20260425181627_AddIsHiddenAndSecrets")]
+    partial class AddIsHiddenAndSecrets
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

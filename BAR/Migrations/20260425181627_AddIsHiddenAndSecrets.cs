@@ -9,7 +9,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BAR.Migrations
 {
     /// <inheritdoc />
-    public partial class AddSecretDrinkAndHostileMood : Migration
+    public partial class AddIsHiddenAndSecrets : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
