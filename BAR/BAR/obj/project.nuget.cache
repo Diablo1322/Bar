@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "dgSpecHash": "4v1xS3XUqlM=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\rusyu\\OneDrive\\Рабочий стол\\Лаба\\Языки и методы программирования. 2 семестр\\Лабораторная работа №3\\BAR\\BAR\\BAR.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\rusyu\\.nuget\\packages\\microsoft.aspnetcore.openapi\\10.0.5\\microsoft.aspnetcore.openapi.10.0.5.nupkg.sha512",
+    "C:\\Users\\rusyu\\.nuget\\packages\\microsoft.openapi\\2.0.0\\microsoft.openapi.2.0.0.nupkg.sha512",
+    "C:\\Users\\rusyu\\.nuget\\packages\\microsoft.visualstudio.azure.containers.tools.targets\\1.23.0\\microsoft.visualstudio.azure.containers.tools.targets.1.23.0.nupkg.sha512"
+  ],
+  "logs": []
+}

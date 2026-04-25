@@ -1,0 +1,22 @@
+@BAR_HostAddress = http://localhost:8000
+
+### 1. Регистрация (Создаем аккаунт)
+# Сохрани токен из ответа этого запроса
+POST {{BAR_HostAddress}}/register
+Content-Type: application/json
+
+###
+
+### 2. Проверка баланса
+# Вставь полученный токен вместо <TOKEN>
+GET {{BAR_HostAddress}}/balance
+Authorization: Bearer ecf99342d34e49d386ba8deee92cb595
+Accept: application/json
+
+###
+
+### 3. Просмотр профиля
+# Вставь полученный токен вместо <TOKEN>
+GET {{BAR_HostAddress}}/profile
+Authorization: Bearer ecf99342d34e49d386ba8deee92cb595
+Accept: application/json
