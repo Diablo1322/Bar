@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BAR.Migrations
 {
     [DbContext(typeof(BarDbContext))]
-    [Migration("20260426093704_AddNightAccessAndMixTimeFilter")]
-    partial class AddNightAccessAndMixTimeFilter
+    [Migration("20260426104214_ChangeBalanceToLong")]
+    partial class ChangeBalanceToLong
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -90,10 +90,10 @@ namespace BAR.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("account_id");
 
-                    b.Property<int>("Amount")
+                    b.Property<long>("Amount")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(100)
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(100L)
                         .HasColumnName("balance");
 
                     b.HasKey("AccountId");
@@ -656,6 +656,12 @@ namespace BAR.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("favorite_drink");
 
+                    b.Property<bool>("HasFreeDrink")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("has_free_drink");
+
                     b.Property<bool>("HasNightAccess")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -750,12 +756,13 @@ namespace BAR.Migrations
                         new
                         {
                             Id = 1,
-                            BonusBalance = 50,
+                            BonusBalance = 0,
                             Code = "ANTIHACK",
                             FreeDrink = false,
                             IsEnabled = true,
+                            MaxUses = 3,
                             NightAccess = false,
-                            UsesLeft = 999999
+                            UsesLeft = 3
                         },
                         new
                         {
@@ -764,14 +771,14 @@ namespace BAR.Migrations
                             Code = "FREESHOT",
                             FreeDrink = true,
                             IsEnabled = true,
-                            MaxUses = 3,
+                            MaxUses = 1,
                             NightAccess = false,
-                            UsesLeft = 3
+                            UsesLeft = 1
                         },
                         new
                         {
                             Id = 3,
-                            BonusBalance = 500,
+                            BonusBalance = 50,
                             Code = "RICHBOY",
                             FreeDrink = false,
                             IsEnabled = true,
@@ -781,11 +788,11 @@ namespace BAR.Migrations
                         new
                         {
                             Id = 4,
-                            BonusBalance = 0,
+                            BonusBalance = 50,
                             Code = "GOODMOOD",
                             FreeDrink = false,
                             IsEnabled = true,
-                            MoodEffect = "friendly",
+                            MoodEffect = "generous",
                             NightAccess = false,
                             UsesLeft = 999999
                         },
@@ -802,13 +809,13 @@ namespace BAR.Migrations
                         new
                         {
                             Id = 6,
-                            BonusBalance = 10000,
+                            BonusBalance = 0,
                             Code = "LEGEND",
                             FreeDrink = false,
                             IsEnabled = true,
-                            MaxUses = 1,
+                            MaxUses = 5,
                             NightAccess = false,
-                            UsesLeft = 1
+                            UsesLeft = 5
                         });
                 });
 

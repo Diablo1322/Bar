@@ -10,6 +10,7 @@ public class Profile
     public bool BarClosed { get; set; } = false;
 
     public bool HasNightAccess { get; set; } = false;
+    public bool HasFreeDrink { get; set; } = false;
 
     public Account? Account { get; set; }
 }

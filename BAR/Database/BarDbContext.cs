@@ -133,16 +133,16 @@ public class BarDbContext : DbContext
             );
         // Промокоды
         modelBuilder.Entity<PromoCode>().HasData(
-            new PromoCode { Id = 1, Code = "ANTIHACK", MaxUses = null, UsesLeft = 999999, BonusBalance = 50 },
-            new PromoCode { Id = 2, Code = "FREESHOT", MaxUses = 3, UsesLeft = 3, FreeDrink = true },
-            new PromoCode { Id = 3, Code = "RICHBOY", MaxUses = null, UsesLeft = 999999, BonusBalance = 500 },
-            new PromoCode { Id = 4, Code = "GOODMOOD", MaxUses = null, UsesLeft = 999999, MoodEffect = "friendly" },
+            new PromoCode { Id = 1, Code = "ANTIHACK", MaxUses = 3, UsesLeft = 3, BonusBalance = 0 },
+            new PromoCode { Id = 2, Code = "FREESHOT", MaxUses = 1, UsesLeft = 1, FreeDrink = true },
+            new PromoCode { Id = 3, Code = "RICHBOY", MaxUses = null, UsesLeft = 999999, BonusBalance = 50 },
+            new PromoCode { Id = 4, Code = "GOODMOOD", MaxUses = null, UsesLeft = 999999, BonusBalance = 50, MoodEffect = "generous" },
             new PromoCode { Id = 5, Code = "NIGHT", MaxUses = null, UsesLeft = 999999, NightAccess = true },
-            new PromoCode { Id = 6, Code = "LEGEND", MaxUses = 1, UsesLeft = 1, BonusBalance = 10000 }
+            new PromoCode { Id = 6, Code = "LEGEND", MaxUses = 5, UsesLeft = 5, BonusBalance = 0 }
         );
 
-         // Настройка промо-системы
-         modelBuilder.Entity<PromoSetting>().HasData(
+        // Настройка промо-системы
+        modelBuilder.Entity<PromoSetting>().HasData(
              new PromoSetting { Id = 1, PromoEnabled = true }  // Включаем по умолчанию
          );
     }

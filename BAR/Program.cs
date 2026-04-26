@@ -24,11 +24,20 @@ builder.Services.AddScoped<IBarService, BarService>();
 
 var app = builder.Build();
 
-// Применяем миграции при старте
+// Применяем миграции при старте + сброс UsesLeft для промокодов
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<BarDbContext>();
     db.Database.Migrate();
+
+    // Сброс UsesLeft при каждом запуске
+    var promos = await db.PromoCodes.ToListAsync();
+    foreach (var p in promos)
+    {
+        if (p.MaxUses.HasValue)
+            p.UsesLeft = p.MaxUses.Value;
+    }
+    await db.SaveChangesAsync();
 }
 
 // ====================== ОБРАБОТКА НЕИЗВЕСТНЫХ ЭНДПОИНТОВ ======================
@@ -39,6 +48,18 @@ app.UseStatusCodePages(async context =>
     {
         response.ContentType = "application/json; charset=utf-8";
         await response.WriteAsync("{\"status\":\"error\",\"error\":\"not_found\"}");
+    }
+});
+
+// ====================== ОБРАБОТКА 401 ======================
+app.Use(async (context, next) =>
+{
+    await next();
+    if (context.Response.StatusCode == 401)
+    {
+        context.Response.ContentType = "application/json; charset=utf-8";
+        var body = "{\"detail\":{\"status\":\"error\",\"error\":\"unauthorized\"}}";
+        await context.Response.WriteAsync(body);
     }
 });
 
@@ -117,7 +138,12 @@ var adminKey = Environment.GetEnvironmentVariable("ADMIN_KEY") ?? "AntiHack2026S
 app.MapPost("/admin/promo", async (HttpContext ctx, AdminPromoRequest req) =>
 {
     if (req.Key != adminKey)
-        return Results.Forbid();
+    {
+        ctx.Response.StatusCode = 403;
+        ctx.Response.ContentType = "application/json; charset=utf-8";
+        await ctx.Response.WriteAsync("{\"detail\":{\"status\":\"error\",\"error\":\"forbidden\"}}");
+        return;
+    }
 
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<BarDbContext>();
@@ -125,7 +151,8 @@ app.MapPost("/admin/promo", async (HttpContext ctx, AdminPromoRequest req) =>
     setting.PromoEnabled = req.Enabled;
     await db.SaveChangesAsync();
 
-    return Results.Ok(new { status = "ok", promo_enabled = setting.PromoEnabled });
+    ctx.Response.ContentType = "application/json; charset=utf-8";
+    await ctx.Response.WriteAsync($"{{\"status\":\"ok\",\"promo_enabled\":{setting.PromoEnabled.ToString().ToLower()}}}");
 });
 
 app.MapGet("/admin/promo", async () =>

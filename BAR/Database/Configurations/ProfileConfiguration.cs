@@ -21,6 +21,10 @@ public class ProfileConfiguration : IEntityTypeConfiguration<Profile>
                .HasColumnName("has_night_access")
                .HasDefaultValue(false);
 
+        builder.Property(p => p.HasFreeDrink)
+       .HasColumnName("has_free_drink")
+       .HasDefaultValue(false);
+
         builder.HasOne(p => p.Account).WithOne(a => a.Profile);
     }
 }

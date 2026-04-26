@@ -9,7 +9,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BAR.Migrations
 {
     /// <inheritdoc />
-    public partial class AddNightAccessAndMixTimeFilter : Migration
+    public partial class ChangeBalanceToLong : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -117,7 +117,7 @@ namespace BAR.Migrations
                 columns: table => new
                 {
                     account_id = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                    balance = table.Column<int>(type: "integer", nullable: false, defaultValue: 100)
+                    balance = table.Column<long>(type: "bigint", nullable: false, defaultValue: 100L)
                 },
                 constraints: table =>
                 {
@@ -203,7 +203,8 @@ namespace BAR.Migrations
                     unique_drinks = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
                     favorite_drink = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
                     bar_closed = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    has_night_access = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false)
+                    has_night_access = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    has_free_drink = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false)
                 },
                 constraints: table =>
                 {
@@ -308,23 +309,22 @@ namespace BAR.Migrations
 
             migrationBuilder.InsertData(
                 table: "promo_codes",
-                columns: new[] { "id", "bonus_balance", "code", "is_enabled", "max_uses", "mood_effect", "uses_left" },
-                values: new object[] { 1, 50, "ANTIHACK", true, null, null, 999999 });
+                columns: new[] { "id", "code", "is_enabled", "max_uses", "mood_effect", "uses_left" },
+                values: new object[] { 1, "ANTIHACK", true, 3, null, 3 });
 
             migrationBuilder.InsertData(
                 table: "promo_codes",
                 columns: new[] { "id", "code", "free_drink", "is_enabled", "max_uses", "mood_effect", "uses_left" },
-                values: new object[] { 2, "FREESHOT", true, true, 3, null, 3 });
+                values: new object[] { 2, "FREESHOT", true, true, 1, null, 1 });
 
             migrationBuilder.InsertData(
                 table: "promo_codes",
                 columns: new[] { "id", "bonus_balance", "code", "is_enabled", "max_uses", "mood_effect", "uses_left" },
-                values: new object[] { 3, 500, "RICHBOY", true, null, null, 999999 });
-
-            migrationBuilder.InsertData(
-                table: "promo_codes",
-                columns: new[] { "id", "code", "is_enabled", "max_uses", "mood_effect", "uses_left" },
-                values: new object[] { 4, "GOODMOOD", true, null, "friendly", 999999 });
+                values: new object[,]
+                {
+                    { 3, 50, "RICHBOY", true, null, null, 999999 },
+                    { 4, 50, "GOODMOOD", true, null, "generous", 999999 }
+                });
 
             migrationBuilder.InsertData(
                 table: "promo_codes",
@@ -333,8 +333,8 @@ namespace BAR.Migrations
 
             migrationBuilder.InsertData(
                 table: "promo_codes",
-                columns: new[] { "id", "bonus_balance", "code", "is_enabled", "max_uses", "mood_effect", "uses_left" },
-                values: new object[] { 6, 10000, "LEGEND", true, 1, null, 1 });
+                columns: new[] { "id", "code", "is_enabled", "max_uses", "mood_effect", "uses_left" },
+                values: new object[] { 6, "LEGEND", true, 5, null, 5 });
 
             migrationBuilder.InsertData(
                 table: "promo_settings",

@@ -35,7 +35,7 @@ public class BarService : IBarService
         _db.Accounts.Add(account);
         await _db.SaveChangesAsync();
 
-        _db.Balances.Add(new Balance { AccountId = id, Amount = 100 });
+        _db.Balances.Add(new Balance { AccountId = id, Amount = 100L });
         _db.Profiles.Add(new Profile { AccountId = id });
         _db.MoodTrackings.Add(new MoodTracking { AccountId = id });
         _db.RateLimits.Add(new RateLimit { AccountId = id });
@@ -50,13 +50,14 @@ public class BarService : IBarService
         var account = await GetAccountWithAll(token);
         if (account == null) return Results.Unauthorized();
 
-        account.Balance!.Amount = 100;
+        account.Balance!.Amount = 100L;
         account.Profile!.Rank = "Новичок";
         account.Profile.TotalOrders = 0;
         account.Profile.UniqueDrinks = 0;
         account.Profile.FavoriteDrink = null;
         account.Profile.BarClosed = false;
         account.Profile.HasNightAccess = false;
+        account.Profile.HasFreeDrink = false;
 
         account.MoodTracking!.MoodLevel = "normal";
         account.MoodTracking.ConsecutiveSimilarOrders = 0;
@@ -107,9 +108,7 @@ public class BarService : IBarService
         if (account.Profile!.BarClosed)
             return Results.Ok(new { status = "error", error = "bar_closed" });
 
-        // НОВОЕ: NIGHT промокод переопределяет время суток
-        bool isNight = account.Profile.HasNightAccess || IsNightTime(xTime);
-
+        bool isNight = IsNightTime(xTime);
         var totalOrders = account.Profile.TotalOrders;
 
         var drinks = await _db.Drinks
@@ -120,7 +119,7 @@ public class BarService : IBarService
 
         var drinkList = drinks
             .Where(d => d.MinDrinkCount <= totalOrders)
-            .Where(d => isNight ? d.IsNight : !d.IsNight)
+            .Where(d => account.Profile.HasNightAccess || (isNight ? d.IsNight : !d.IsNight))
             .Select(d => new
             {
                 name = d.Name,
@@ -160,7 +159,14 @@ public class BarService : IBarService
         if (nextConsecutive == 8)
             price = 0;
 
-        if (account.Balance!.Amount < price && price != 0)
+        // FREESHOT — бесплатный напиток
+        if (account.Profile.HasFreeDrink)
+        {
+            price = 0;
+            account.Profile.HasFreeDrink = false;
+        }
+
+        if (account.Balance!.Amount < (long)price && price != 0)
             return Results.Ok(new { status = "error", error = "insufficient_funds", price, balance = account.Balance.Amount, mood_level = account.MoodTracking.MoodLevel });
 
         account.Balance.Amount -= price;
@@ -215,7 +221,7 @@ public class BarService : IBarService
         var drinks = await _db.Drinks
             .Include(d => d.DrinkIngredients)
             .ThenInclude(di => di.Ingredient)
-            .Where(d => d.IsHidden || (isNight ? d.IsNight : !d.IsNight))
+            .Where(d => d.IsHidden || account.Profile.HasNightAccess || (isNight ? d.IsNight : !d.IsNight))
             .ToListAsync();
 
         Drink? matchingDrink = null;
@@ -269,6 +275,13 @@ public class BarService : IBarService
         if (matchingDrink.IsHidden)
             price = 0;
 
+        // FREESHOT — бесплатный напиток
+        if (account.Profile.HasFreeDrink)
+        {
+            price = 0;
+            account.Profile.HasFreeDrink = false;
+        }
+
         if (account.Balance!.Amount < price && price != 0)
             return Results.Ok(new
             {
@@ -282,7 +295,16 @@ public class BarService : IBarService
         account.Balance.Amount -= price;
 
         if (matchingDrink.Name == "Мертвец")
-            account.Balance.Amount = account.Balance.Amount * 2;
+        {
+            if (account.Balance.Amount > long.MaxValue / 2)
+            {
+                account.Balance.Amount = long.MaxValue;
+            }
+            else
+            {
+                account.Balance.Amount *= 2;
+            }
+        }
 
         _db.Orders.Add(new Order
         {
@@ -330,7 +352,7 @@ public class BarService : IBarService
         {
             status = "ok",
             balance = account.Balance!.Amount,
-            mood_level = account.MoodTracking!.MoodLevel,
+            mood_level = account.MoodTracking!.MoodLevel
         });
     }
 
@@ -433,8 +455,7 @@ public class BarService : IBarService
     private bool IsNightTime(string xTime)
     {
         if (string.IsNullOrEmpty(xTime) || !TimeOnly.TryParse(xTime, out var time))
-            return false; // по умолчанию день
-
+            return false;
         return time.Hour >= 0 && time.Hour < 6;
     }
 
@@ -458,6 +479,9 @@ public class BarService : IBarService
                 break;
             case "friendly":
                 price = Math.Max(5, price - 2);
+                break;
+            case "generous":
+                price = Math.Max(5, price - 4);
                 break;
         }
 
@@ -486,7 +510,6 @@ public class BarService : IBarService
         mood.LastDrink = drinkName;
         mood.LastOrderTime = DateTime.UtcNow;
 
-        // Mix всегда даёт friendly
         if (method == "mix")
         {
             mood.MoodLevel = "friendly";
@@ -537,7 +560,6 @@ public class BarService : IBarService
         var (allowed, retryAfter) = await CheckRateLimit(account);
         if (!allowed) return Results.Ok(new { status = "error", error = "rate_limit", retry_after = retryAfter });
 
-        // Проверяем, включена ли промо-система
         var setting = await _db.PromoSettings.FirstAsync();
         if (!setting.PromoEnabled)
             return Results.NotFound();
@@ -549,47 +571,28 @@ public class BarService : IBarService
         if (promo == null)
             return Results.Ok(new { status = "error", error = "invalid_code", balance = account.Balance!.Amount, mood_level = account.MoodTracking!.MoodLevel });
 
-        // Проверяем, не использовал ли уже этот код
         var alreadyUsed = await _db.AccountPromos.AnyAsync(ap => ap.AccountId == account.Id && ap.Code == code);
         if (alreadyUsed)
             return Results.Ok(new { status = "error", error = "already_used", balance = account.Balance!.Amount, mood_level = account.MoodTracking!.MoodLevel });
 
-        // Проверяем лимит использований
         if (promo.UsesLeft <= 0)
             return Results.Ok(new { status = "error", error = "invalid_code", balance = account.Balance!.Amount, mood_level = account.MoodTracking!.MoodLevel });
 
-        // ==================== ПРИМЕНЯЕМ ЭФФЕКТЫ (один раз!) ====================
-
-        // Бонус к балансу (ANTIHACK, RICHBOY, LEGEND и т.д.)
+        // Применяем эффекты
         if (promo.BonusBalance > 0)
-        {
             account.Balance!.Amount += promo.BonusBalance;
-        }
 
-        // Изменение настроения (GOODMOOD)
         if (!string.IsNullOrEmpty(promo.MoodEffect))
-        {
             account.MoodTracking!.MoodLevel = promo.MoodEffect;
-        }
 
-        // Бесплатный напиток (FREESHOT)
         if (promo.FreeDrink)
-        {
-            account.Balance!.Amount += 10;   // эквивалент "Русский"
-        }
+            account.Profile!.HasFreeDrink = true;
 
-        // Ночной доступ (NIGHT)
         if (promo.NightAccess)
-        {
             account.Profile!.HasNightAccess = true;
-        }
 
-        // Уменьшаем счётчик использований
         promo.UsesLeft--;
-
-        // Записываем использование промокода
         _db.AccountPromos.Add(new AccountPromo { AccountId = account.Id, Code = code });
-
         await _db.SaveChangesAsync();
 
         return Results.Ok(new
@@ -609,7 +612,6 @@ public class BarService : IBarService
         var (allowed, retryAfter) = await CheckRateLimit(account);
         if (!allowed) return Results.Ok(new { status = "error", error = "rate_limit", retry_after = retryAfter });
 
-        // Проверяем, включена ли промо-система
         var setting = await _db.PromoSettings.FirstAsync();
         if (!setting.PromoEnabled)
             return Results.NotFound();
@@ -642,5 +644,4 @@ public class BarService : IBarService
             .AsSplitQuery()
             .FirstOrDefaultAsync(a => a.Token == token);
     }
-
 }
