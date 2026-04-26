@@ -9,5 +9,7 @@ public class Profile
     public string? FavoriteDrink { get; set; }
     public bool BarClosed { get; set; } = false;
 
+    public bool HasNightAccess { get; set; } = false;
+
     public Account? Account { get; set; }
 }

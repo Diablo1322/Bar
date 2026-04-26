@@ -16,6 +16,9 @@ public class BarDbContext : DbContext
     public DbSet<DrinkIngredient> DrinkIngredients => Set<DrinkIngredient>();
     public DbSet<OrderSequence> OrderSequences => Set<OrderSequence>();
     public DbSet<RateLimit> RateLimits => Set<RateLimit>();
+    public DbSet<PromoCode> PromoCodes => Set<PromoCode>();
+    public DbSet<AccountPromo> AccountPromos => Set<AccountPromo>();
+    public DbSet<PromoSetting> PromoSettings => Set<PromoSetting>();
 
     public BarDbContext(DbContextOptions<BarDbContext> options) : base(options) { }
 
@@ -31,6 +34,9 @@ public class BarDbContext : DbContext
         modelBuilder.ApplyConfiguration(new DrinkIngredientConfiguration());
         modelBuilder.ApplyConfiguration(new OrderSequenceConfiguration());
         modelBuilder.ApplyConfiguration(new RateLimitConfiguration());
+        modelBuilder.ApplyConfiguration(new PromoCodeConfiguration());
+        modelBuilder.ApplyConfiguration(new AccountPromoConfiguration());
+        modelBuilder.ApplyConfiguration(new PromoSettingConfiguration());
 
         SeedData(modelBuilder);
     }
@@ -124,6 +130,20 @@ public class BarDbContext : DbContext
             new DrinkIngredient { DrinkId = 12, IngredientId = 1 },
             new DrinkIngredient { DrinkId = 12, IngredientId = 2 },
             new DrinkIngredient { DrinkId = 12, IngredientId = 10 }
+            );
+        // Промокоды
+        modelBuilder.Entity<PromoCode>().HasData(
+            new PromoCode { Id = 1, Code = "ANTIHACK", MaxUses = null, UsesLeft = 999999, BonusBalance = 50 },
+            new PromoCode { Id = 2, Code = "FREESHOT", MaxUses = 3, UsesLeft = 3, FreeDrink = true },
+            new PromoCode { Id = 3, Code = "RICHBOY", MaxUses = null, UsesLeft = 999999, BonusBalance = 500 },
+            new PromoCode { Id = 4, Code = "GOODMOOD", MaxUses = null, UsesLeft = 999999, MoodEffect = "friendly" },
+            new PromoCode { Id = 5, Code = "NIGHT", MaxUses = null, UsesLeft = 999999, NightAccess = true },
+            new PromoCode { Id = 6, Code = "LEGEND", MaxUses = 1, UsesLeft = 1, BonusBalance = 10000 }
         );
+
+         // Настройка промо-системы
+         modelBuilder.Entity<PromoSetting>().HasData(
+             new PromoSetting { Id = 1, PromoEnabled = true }  // Включаем по умолчанию
+         );
     }
 }

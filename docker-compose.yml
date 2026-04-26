@@ -34,8 +34,9 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__DefaultConnection=Host=postgres;Database=bar_db;Username=postgres;Password=postgres
+    - ASPNETCORE_ENVIRONMENT=Development
+    - ConnectionStrings__DefaultConnection=Host=postgres;Database=bar_db;Username=postgres;Password=postgres
+    - ADMIN_KEY=AntiHack2026Secret
     depends_on:
       postgres:
         condition: service_healthy

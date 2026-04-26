@@ -15,6 +15,8 @@ public interface IBarService
     Task<IResult> TipAsync(string token, int amount);
     Task<IResult> GetHistoryAsync(string token);
     Task<IResult> GetProfileAsync(string token);
+    Task<IResult> ActivatePromoAsync(string token, string code);
+    Task<IResult> GetActivePromosAsync(string token);
 }
 
 public class BarService : IBarService
@@ -54,6 +56,7 @@ public class BarService : IBarService
         account.Profile.UniqueDrinks = 0;
         account.Profile.FavoriteDrink = null;
         account.Profile.BarClosed = false;
+        account.Profile.HasNightAccess = false;
 
         account.MoodTracking!.MoodLevel = "normal";
         account.MoodTracking.ConsecutiveSimilarOrders = 0;
@@ -101,9 +104,12 @@ public class BarService : IBarService
         var (allowed, retryAfter) = await CheckRateLimit(account);
         if (!allowed) return Results.Ok(new { status = "error", error = "rate_limit", retry_after = retryAfter });
 
-        if (account.Profile!.BarClosed) return Results.Ok(new { status = "error", error = "bar_closed" });
+        if (account.Profile!.BarClosed)
+            return Results.Ok(new { status = "error", error = "bar_closed" });
 
-        var isNight = IsNightTime(xTime);
+        // НОВОЕ: NIGHT промокод переопределяет время суток
+        bool isNight = account.Profile.HasNightAccess || IsNightTime(xTime);
+
         var totalOrders = account.Profile.TotalOrders;
 
         var drinks = await _db.Drinks
@@ -187,18 +193,29 @@ public class BarService : IBarService
         if (account == null) return Results.Unauthorized();
 
         var (allowed, retryAfter) = await CheckRateLimit(account);
-        if (!allowed) return Results.Ok(new { status = "error", error = "rate_limit", retry_after = retryAfter });
+        if (!allowed)
+            return Results.Ok(new { status = "error", error = "rate_limit", retry_after = retryAfter });
 
-        if (account.Profile!.BarClosed) return Results.Ok(new { status = "error", error = "bar_closed" });
+        if (account.Profile!.BarClosed)
+            return Results.Ok(new { status = "error", error = "bar_closed" });
 
         if (ingredients == null || ingredients.Count == 0)
-            return Results.Ok(new { status = "error", error = "unknown_recipe", balance = account.Balance!.Amount, mood_level = account.MoodTracking!.MoodLevel });
+            return Results.Ok(new
+            {
+                status = "error",
+                error = "unknown_recipe",
+                balance = account.Balance!.Amount,
+                mood_level = account.MoodTracking!.MoodLevel
+            });
 
         var normalized = ingredients.Select(i => i.ToLowerInvariant().Trim()).OrderBy(x => x).ToList();
+
+        bool isNight = account.Profile.HasNightAccess || IsNightTime(xTime);
 
         var drinks = await _db.Drinks
             .Include(d => d.DrinkIngredients)
             .ThenInclude(di => di.Ingredient)
+            .Where(d => d.IsHidden || (isNight ? d.IsNight : !d.IsNight))
             .ToListAsync();
 
         Drink? matchingDrink = null;
@@ -226,7 +243,14 @@ public class BarService : IBarService
                 _ => account.MoodTracking.MoodLevel
             };
             await _db.SaveChangesAsync();
-            return Results.Ok(new { status = "error", error = "unknown_recipe", balance = account.Balance!.Amount, mood_level = account.MoodTracking!.MoodLevel });
+
+            return Results.Ok(new
+            {
+                status = "error",
+                error = "unknown_recipe",
+                balance = account.Balance!.Amount,
+                mood_level = account.MoodTracking!.MoodLevel
+            });
         }
 
         var consecutive = await GetConsecutiveCount(account.Id, matchingDrink.Name);
@@ -235,14 +259,25 @@ public class BarService : IBarService
         var basePrice = CalculatePrice(matchingDrink, account.MoodTracking!.MoodLevel);
         var price = (int)Math.Max(5, basePrice * 0.8);
 
+        bool isFreeEvery7th = false;
         if (nextConsecutive == 7)
+        {
             price = 0;
+            isFreeEvery7th = true;
+        }
 
         if (matchingDrink.IsHidden)
             price = 0;
 
         if (account.Balance!.Amount < price && price != 0)
-            return Results.Ok(new { status = "error", error = "insufficient_funds", price, balance = account.Balance.Amount, mood_level = account.MoodTracking.MoodLevel });
+            return Results.Ok(new
+            {
+                status = "error",
+                error = "insufficient_funds",
+                price = price,
+                balance = account.Balance.Amount,
+                mood_level = account.MoodTracking.MoodLevel
+            });
 
         account.Balance.Amount -= price;
 
@@ -270,6 +305,9 @@ public class BarService : IBarService
             ["mood_level"] = account.MoodTracking!.MoodLevel
         };
 
+        if (isFreeEvery7th)
+            result["free_every_7th"] = true;
+
         if (matchingDrink.IsHidden)
         {
             result["secret"] = true;
@@ -292,7 +330,7 @@ public class BarService : IBarService
         {
             status = "ok",
             balance = account.Balance!.Amount,
-            mood_level = account.MoodTracking!.MoodLevel
+            mood_level = account.MoodTracking!.MoodLevel,
         });
     }
 
@@ -366,7 +404,8 @@ public class BarService : IBarService
             total_orders = account.Profile.TotalOrders,
             unique_drinks = account.Profile.UniqueDrinks,
             favorite_drink = account.Profile.FavoriteDrink,
-            bar_closed = account.Profile.BarClosed
+            bar_closed = account.Profile.BarClosed,
+            has_night_access = account.Profile.HasNightAccess
         });
     }
 
@@ -394,7 +433,8 @@ public class BarService : IBarService
     private bool IsNightTime(string xTime)
     {
         if (string.IsNullOrEmpty(xTime) || !TimeOnly.TryParse(xTime, out var time))
-            return false;
+            return false; // по умолчанию день
+
         return time.Hour >= 0 && time.Hour < 6;
     }
 
@@ -488,4 +528,119 @@ public class BarService : IBarService
 
         await _db.SaveChangesAsync();
     }
+
+    public async Task<IResult> ActivatePromoAsync(string token, string code)
+    {
+        var account = await GetAccountWithAllForPromo(token);
+        if (account == null) return Results.Unauthorized();
+
+        var (allowed, retryAfter) = await CheckRateLimit(account);
+        if (!allowed) return Results.Ok(new { status = "error", error = "rate_limit", retry_after = retryAfter });
+
+        // Проверяем, включена ли промо-система
+        var setting = await _db.PromoSettings.FirstAsync();
+        if (!setting.PromoEnabled)
+            return Results.NotFound();
+
+        if (string.IsNullOrEmpty(code))
+            return Results.Ok(new { status = "error", error = "invalid_code", balance = account.Balance!.Amount, mood_level = account.MoodTracking!.MoodLevel });
+
+        var promo = await _db.PromoCodes.FirstOrDefaultAsync(p => p.Code == code && p.IsEnabled);
+        if (promo == null)
+            return Results.Ok(new { status = "error", error = "invalid_code", balance = account.Balance!.Amount, mood_level = account.MoodTracking!.MoodLevel });
+
+        // Проверяем, не использовал ли уже этот код
+        var alreadyUsed = await _db.AccountPromos.AnyAsync(ap => ap.AccountId == account.Id && ap.Code == code);
+        if (alreadyUsed)
+            return Results.Ok(new { status = "error", error = "already_used", balance = account.Balance!.Amount, mood_level = account.MoodTracking!.MoodLevel });
+
+        // Проверяем лимит использований
+        if (promo.UsesLeft <= 0)
+            return Results.Ok(new { status = "error", error = "invalid_code", balance = account.Balance!.Amount, mood_level = account.MoodTracking!.MoodLevel });
+
+        // ==================== ПРИМЕНЯЕМ ЭФФЕКТЫ (один раз!) ====================
+
+        // Бонус к балансу (ANTIHACK, RICHBOY, LEGEND и т.д.)
+        if (promo.BonusBalance > 0)
+        {
+            account.Balance!.Amount += promo.BonusBalance;
+        }
+
+        // Изменение настроения (GOODMOOD)
+        if (!string.IsNullOrEmpty(promo.MoodEffect))
+        {
+            account.MoodTracking!.MoodLevel = promo.MoodEffect;
+        }
+
+        // Бесплатный напиток (FREESHOT)
+        if (promo.FreeDrink)
+        {
+            account.Balance!.Amount += 10;   // эквивалент "Русский"
+        }
+
+        // Ночной доступ (NIGHT)
+        if (promo.NightAccess)
+        {
+            account.Profile!.HasNightAccess = true;
+        }
+
+        // Уменьшаем счётчик использований
+        promo.UsesLeft--;
+
+        // Записываем использование промокода
+        _db.AccountPromos.Add(new AccountPromo { AccountId = account.Id, Code = code });
+
+        await _db.SaveChangesAsync();
+
+        return Results.Ok(new
+        {
+            status = "ok",
+            code,
+            balance = account.Balance!.Amount,
+            mood_level = account.MoodTracking!.MoodLevel
+        });
+    }
+
+    public async Task<IResult> GetActivePromosAsync(string token)
+    {
+        var account = await GetAccountWithAllForPromo(token);
+        if (account == null) return Results.Unauthorized();
+
+        var (allowed, retryAfter) = await CheckRateLimit(account);
+        if (!allowed) return Results.Ok(new { status = "error", error = "rate_limit", retry_after = retryAfter });
+
+        // Проверяем, включена ли промо-система
+        var setting = await _db.PromoSettings.FirstAsync();
+        if (!setting.PromoEnabled)
+            return Results.NotFound();
+
+        var active = await _db.PromoCodes
+            .Where(p => p.IsEnabled && p.UsesLeft > 0)
+            .Select(p => new
+            {
+                code = p.Code,
+                remaining = p.MaxUses == null ? (int?)null : p.UsesLeft
+            })
+            .ToListAsync();
+
+        return Results.Ok(new
+        {
+            status = "ok",
+            active,
+            balance = account.Balance!.Amount,
+            mood_level = account.MoodTracking!.MoodLevel
+        });
+    }
+
+    private async Task<Account?> GetAccountWithAllForPromo(string token)
+    {
+        return await _db.Accounts
+            .Include(a => a.Balance)
+            .Include(a => a.Profile)
+            .Include(a => a.MoodTracking)
+            .Include(a => a.RateLimit)
+            .AsSplitQuery()
+            .FirstOrDefaultAsync(a => a.Token == token);
+    }
+
 }

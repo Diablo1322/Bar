@@ -17,6 +17,10 @@ public class ProfileConfiguration : IEntityTypeConfiguration<Profile>
         builder.Property(p => p.FavoriteDrink).HasColumnName("favorite_drink").HasMaxLength(100);
         builder.Property(p => p.BarClosed).HasColumnName("bar_closed").HasDefaultValue(false);
 
+        builder.Property(p => p.HasNightAccess)
+               .HasColumnName("has_night_access")
+               .HasDefaultValue(false);
+
         builder.HasOne(p => p.Account).WithOne(a => a.Profile);
     }
 }

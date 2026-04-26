@@ -9,7 +9,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BAR.Migrations
 {
     /// <inheritdoc />
-    public partial class AddIsHiddenAndSecrets : Migration
+    public partial class AddNightAccessAndMixTimeFilter : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -56,6 +56,60 @@ namespace BAR.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_ingredients", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "promo_codes",
+                columns: table => new
+                {
+                    id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    code = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    max_uses = table.Column<int>(type: "integer", nullable: true),
+                    uses_left = table.Column<int>(type: "integer", nullable: false),
+                    bonus_balance = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
+                    mood_effect = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
+                    night_access = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    free_drink = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    is_enabled = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_promo_codes", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "promo_settings",
+                columns: table => new
+                {
+                    id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    promo_enabled = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_promo_settings", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "account_promos",
+                columns: table => new
+                {
+                    id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    account_id = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    code = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    used_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_account_promos", x => x.id);
+                    table.ForeignKey(
+                        name: "FK_account_promos_accounts_account_id",
+                        column: x => x.account_id,
+                        principalTable: "accounts",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -148,7 +202,8 @@ namespace BAR.Migrations
                     total_orders = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
                     unique_drinks = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
                     favorite_drink = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    bar_closed = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false)
+                    bar_closed = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    has_night_access = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false)
                 },
                 constraints: table =>
                 {
@@ -232,11 +287,7 @@ namespace BAR.Migrations
             migrationBuilder.InsertData(
                 table: "drinks",
                 columns: new[] { "id", "base_price", "is_hidden", "name" },
-                values: new object[,]
-                {
-                    { 12, 0, true, "Ошибка бармена" },
-                    { 13, 0, true, "Мертвец" }
-                });
+                values: new object[] { 12, 0, true, "Мертвец" });
 
             migrationBuilder.InsertData(
                 table: "ingredients",
@@ -254,6 +305,41 @@ namespace BAR.Migrations
                     { 9, "лёд" },
                     { 10, "молоко" }
                 });
+
+            migrationBuilder.InsertData(
+                table: "promo_codes",
+                columns: new[] { "id", "bonus_balance", "code", "is_enabled", "max_uses", "mood_effect", "uses_left" },
+                values: new object[] { 1, 50, "ANTIHACK", true, null, null, 999999 });
+
+            migrationBuilder.InsertData(
+                table: "promo_codes",
+                columns: new[] { "id", "code", "free_drink", "is_enabled", "max_uses", "mood_effect", "uses_left" },
+                values: new object[] { 2, "FREESHOT", true, true, 3, null, 3 });
+
+            migrationBuilder.InsertData(
+                table: "promo_codes",
+                columns: new[] { "id", "bonus_balance", "code", "is_enabled", "max_uses", "mood_effect", "uses_left" },
+                values: new object[] { 3, 500, "RICHBOY", true, null, null, 999999 });
+
+            migrationBuilder.InsertData(
+                table: "promo_codes",
+                columns: new[] { "id", "code", "is_enabled", "max_uses", "mood_effect", "uses_left" },
+                values: new object[] { 4, "GOODMOOD", true, null, "friendly", 999999 });
+
+            migrationBuilder.InsertData(
+                table: "promo_codes",
+                columns: new[] { "id", "code", "is_enabled", "max_uses", "mood_effect", "night_access", "uses_left" },
+                values: new object[] { 5, "NIGHT", true, null, null, true, 999999 });
+
+            migrationBuilder.InsertData(
+                table: "promo_codes",
+                columns: new[] { "id", "bonus_balance", "code", "is_enabled", "max_uses", "mood_effect", "uses_left" },
+                values: new object[] { 6, 10000, "LEGEND", true, 1, null, 1 });
+
+            migrationBuilder.InsertData(
+                table: "promo_settings",
+                columns: new[] { "id", "promo_enabled" },
+                values: new object[] { 1, true });
 
             migrationBuilder.InsertData(
                 table: "drink_ingredients",
@@ -291,13 +377,16 @@ namespace BAR.Migrations
                     { 11, 5 },
                     { 11, 7 },
                     { 11, 8 },
-                    { 12, 3 },
-                    { 12, 4 },
-                    { 12, 10 },
-                    { 13, 1 },
-                    { 13, 2 },
-                    { 13, 10 }
+                    { 12, 1 },
+                    { 12, 2 },
+                    { 12, 10 }
                 });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_account_promos_account_id_code",
+                table: "account_promos",
+                columns: new[] { "account_id", "code" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_accounts_token",
@@ -326,11 +415,20 @@ namespace BAR.Migrations
                 name: "IX_orders_account_id",
                 table: "orders",
                 column: "account_id");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_promo_codes_code",
+                table: "promo_codes",
+                column: "code",
+                unique: true);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropTable(
+                name: "account_promos");
+
             migrationBuilder.DropTable(
                 name: "balances");
 
@@ -348,6 +446,12 @@ namespace BAR.Migrations
 
             migrationBuilder.DropTable(
                 name: "profiles");
+
+            migrationBuilder.DropTable(
+                name: "promo_codes");
+
+            migrationBuilder.DropTable(
+                name: "promo_settings");
 
             migrationBuilder.DropTable(
                 name: "rate_limits");

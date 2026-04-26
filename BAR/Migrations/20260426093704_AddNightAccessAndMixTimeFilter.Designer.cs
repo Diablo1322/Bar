@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BAR.Migrations
 {
     [DbContext(typeof(BarDbContext))]
-    [Migration("20260425181627_AddIsHiddenAndSecrets")]
-    partial class AddIsHiddenAndSecrets
+    [Migration("20260426093704_AddNightAccessAndMixTimeFilter")]
+    partial class AddNightAccessAndMixTimeFilter
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -48,6 +48,39 @@ namespace BAR.Migrations
                         .IsUnique();
 
                     b.ToTable("accounts", (string)null);
+                });
+
+            modelBuilder.Entity("BAR.Database.Entities.AccountPromo", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AccountId")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("account_id");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("code");
+
+                    b.Property<DateTime>("UsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("used_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId", "Code")
+                        .IsUnique();
+
+                    b.ToTable("account_promos", (string)null);
                 });
 
             modelBuilder.Entity("BAR.Database.Entities.Balance", b =>
@@ -237,16 +270,6 @@ namespace BAR.Migrations
                             IsNight = false,
                             MinDrinkCount = 0,
                             MoodPriceModifier = 0,
-                            Name = "Ошибка бармена"
-                        },
-                        new
-                        {
-                            Id = 13,
-                            BasePrice = 0,
-                            IsHidden = true,
-                            IsNight = false,
-                            MinDrinkCount = 0,
-                            MoodPriceModifier = 0,
                             Name = "Мертвец"
                         });
                 });
@@ -426,31 +449,16 @@ namespace BAR.Migrations
                         new
                         {
                             DrinkId = 12,
-                            IngredientId = 3
-                        },
-                        new
-                        {
-                            DrinkId = 12,
-                            IngredientId = 4
-                        },
-                        new
-                        {
-                            DrinkId = 12,
-                            IngredientId = 10
-                        },
-                        new
-                        {
-                            DrinkId = 13,
                             IngredientId = 1
                         },
                         new
                         {
-                            DrinkId = 13,
+                            DrinkId = 12,
                             IngredientId = 2
                         },
                         new
                         {
-                            DrinkId = 13,
+                            DrinkId = 12,
                             IngredientId = 10
                         });
                 });
@@ -648,6 +656,12 @@ namespace BAR.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("favorite_drink");
 
+                    b.Property<bool>("HasNightAccess")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("has_night_access");
+
                     b.Property<string>("Rank")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -673,6 +687,158 @@ namespace BAR.Migrations
                     b.ToTable("profiles", (string)null);
                 });
 
+            modelBuilder.Entity("BAR.Database.Entities.PromoCode", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BonusBalance")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("bonus_balance");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("code");
+
+                    b.Property<bool>("FreeDrink")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("free_drink");
+
+                    b.Property<bool>("IsEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_enabled");
+
+                    b.Property<int?>("MaxUses")
+                        .HasColumnType("integer")
+                        .HasColumnName("max_uses");
+
+                    b.Property<string>("MoodEffect")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("mood_effect");
+
+                    b.Property<bool>("NightAccess")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("night_access");
+
+                    b.Property<int>("UsesLeft")
+                        .HasColumnType("integer")
+                        .HasColumnName("uses_left");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("promo_codes", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            BonusBalance = 50,
+                            Code = "ANTIHACK",
+                            FreeDrink = false,
+                            IsEnabled = true,
+                            NightAccess = false,
+                            UsesLeft = 999999
+                        },
+                        new
+                        {
+                            Id = 2,
+                            BonusBalance = 0,
+                            Code = "FREESHOT",
+                            FreeDrink = true,
+                            IsEnabled = true,
+                            MaxUses = 3,
+                            NightAccess = false,
+                            UsesLeft = 3
+                        },
+                        new
+                        {
+                            Id = 3,
+                            BonusBalance = 500,
+                            Code = "RICHBOY",
+                            FreeDrink = false,
+                            IsEnabled = true,
+                            NightAccess = false,
+                            UsesLeft = 999999
+                        },
+                        new
+                        {
+                            Id = 4,
+                            BonusBalance = 0,
+                            Code = "GOODMOOD",
+                            FreeDrink = false,
+                            IsEnabled = true,
+                            MoodEffect = "friendly",
+                            NightAccess = false,
+                            UsesLeft = 999999
+                        },
+                        new
+                        {
+                            Id = 5,
+                            BonusBalance = 0,
+                            Code = "NIGHT",
+                            FreeDrink = false,
+                            IsEnabled = true,
+                            NightAccess = true,
+                            UsesLeft = 999999
+                        },
+                        new
+                        {
+                            Id = 6,
+                            BonusBalance = 10000,
+                            Code = "LEGEND",
+                            FreeDrink = false,
+                            IsEnabled = true,
+                            MaxUses = 1,
+                            NightAccess = false,
+                            UsesLeft = 1
+                        });
+                });
+
+            modelBuilder.Entity("BAR.Database.Entities.PromoSetting", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("PromoEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("promo_enabled");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("promo_settings", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            PromoEnabled = true
+                        });
+                });
+
             modelBuilder.Entity("BAR.Database.Entities.RateLimit", b =>
                 {
                     b.Property<string>("AccountId")
@@ -693,6 +859,17 @@ namespace BAR.Migrations
                     b.HasKey("AccountId");
 
                     b.ToTable("rate_limits", (string)null);
+                });
+
+            modelBuilder.Entity("BAR.Database.Entities.AccountPromo", b =>
+                {
+                    b.HasOne("BAR.Database.Entities.Account", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Account");
                 });
 
             modelBuilder.Entity("BAR.Database.Entities.Balance", b =>

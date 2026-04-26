@@ -97,6 +97,45 @@ app.MapGet("/profile", async (HttpContext ctx, IBarService service) =>
     return await service.GetProfileAsync(token);
 });
 
+// ====================== ПРОМОКОДЫ ======================
+
+app.MapPost("/promo", async (HttpContext ctx, PromoRequest req, IBarService service) =>
+{
+    if (!TryGetToken(ctx, out var token)) return Results.Unauthorized();
+    return await service.ActivatePromoAsync(token, req.Code);
+});
+
+app.MapGet("/promo", async (HttpContext ctx, IBarService service) =>
+{
+    if (!TryGetToken(ctx, out var token)) return Results.Unauthorized();
+    return await service.GetActivePromosAsync(token);
+});
+
+// ====================== АДМИНИСТРИРОВАНИЕ ПРОМО ======================
+var adminKey = Environment.GetEnvironmentVariable("ADMIN_KEY") ?? "AntiHack2026Secret";
+
+app.MapPost("/admin/promo", async (HttpContext ctx, AdminPromoRequest req) =>
+{
+    if (req.Key != adminKey)
+        return Results.Forbid();
+
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<BarDbContext>();
+    var setting = await db.PromoSettings.FirstAsync();
+    setting.PromoEnabled = req.Enabled;
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new { status = "ok", promo_enabled = setting.PromoEnabled });
+});
+
+app.MapGet("/admin/promo", async () =>
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<BarDbContext>();
+    var setting = await db.PromoSettings.FirstAsync();
+    return Results.Ok(new { promo_enabled = setting.PromoEnabled });
+});
+
 app.Run("http://0.0.0.0:8000");
 
 bool TryGetToken(HttpContext ctx, out string token)
@@ -111,3 +150,5 @@ bool TryGetToken(HttpContext ctx, out string token)
 public record OrderRequest(string Name);
 public record MixRequest(List<string> Ingredients);
 public record TipRequest(int Amount);
+public record PromoRequest(string Code);
+public record AdminPromoRequest(bool Enabled, string Key);
